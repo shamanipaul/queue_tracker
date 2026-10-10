@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="en" data-theme="aurora">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Queue Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script>
+/* Apply the saved colour scheme before the page paints, so there is no flash. */
+(function () {
+  var id = null;
+  try { id = localStorage.getItem('smartQueueTracker.theme'); } catch (e) {}
+  if (!id) id = (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) ? 'ocean' : 'aurora';
+  document.documentElement.setAttribute('data-theme', id);
+})();
+</script>
+<style>
+/* ---------- colour schemes: change the theme in the header ---------- */
+:root, :root[data-theme="aurora"] {
+  color-scheme: dark;
+  --bg: #090D1C; --ink: #EAEEFF; --muted: #9AA3C7;
+  --surface: rgba(255,255,255,.06); --surface-2: rgba(255,255,255,.11); --line: rgba(255,255,255,.12); --field: rgba(255,255,255,.07);
+  --accent: #7C8CFF; --accent2: #22D3EE; --on-accent: #0A0F24;
+  --blob1: #5B5BFF; --blob2: #22D3EE; --blob3: #B04CFF; --blob-op: .5;
+  --ok: #4ADE9A; --ok-bg: rgba(74,222,154,.15); --warn: #FBBF24; --warn-bg: rgba(251,191,36,.15); --bad: #FF7A85; --bad-bg: rgba(255,122,133,.16);
+}
+:root[data-theme="sunset"] {
+  color-scheme: dark;
+  --bg: #170E12; --ink: #FFF0EA; --muted: #C9A79E;
+  --surface: rgba(255,255,255,.06); --surface-2: rgba(255,255,255,.11); --line: rgba(255,255,255,.12); --field: rgba(255,255,255,.07);
+  --accent: #FF8A5C; --accent2: #FF4D8D; --on-accent: #1A0C10;
+  --blob1: #FF6B3D; --blob2: #FF3D81; --blob3: #FFB347; --blob-op: .45;
+  --ok: #6EE7A8; --ok-bg: rgba(110,231,168,.15); --warn: #FFC857; --warn-bg: rgba(255,200,87,.15); --bad: #FF7A85; --bad-bg: rgba(255,122,133,.16);
+}
+:root[data-theme="forest"] {
+  color-scheme: dark;
+  --bg: #06130E; --ink: #E6FBF1; --muted: #8FB8A5;
+  --surface: rgba(255,255,255,.06); --surface-2: rgba(255,255,255,.11); --line: rgba(255,255,255,.12); --field: rgba(255,255,255,.07);
+  --accent: #34D399; --accent2: #A3E635; --on-accent: #04140C;
+  --blob1: #10B981; --blob2: #14B8A6; --blob3: #84CC16; --blob-op: .42;
+  --ok: #4ADE9A; --ok-bg: rgba(74,222,154,.15); --warn: #FBBF24; --warn-bg: rgba(251,191,36,.15); --bad: #FF7A85; --bad-bg: rgba(255,122,133,.16);
+}
+:root[data-theme="ocean"] {
+  color-scheme: light;
+  --bg: #E8F3FF; --ink: #0B1B33; --muted: #46597B;
+  --surface: rgba(255,255,255,.72); --surface-2: rgba(255,255,255,.95); --line: rgba(15,40,90,.13); --field: rgba(255,255,255,.85);
+  --accent: #1D63E8; --accent2: #0A8FB0; --on-accent: #FFFFFF;
+  --blob1: #4CB5FF; --blob2: #5B7CFF; --blob3: #33D1B8; --blob-op: .5;
+  --ok: #0F7A4C; --ok-bg: rgba(15,138,85,.13); --warn: #8F4F00; --warn-bg: rgba(200,120,0,.15); --bad: #BA1F2A; --bad-bg: rgba(200,40,50,.12);
+}
+:root[data-theme="blossom"] {
+  color-scheme: light;
+  --bg: #FFF1F6; --ink: #2A1020; --muted: #765066;
+  --surface: rgba(255,255,255,.72); --surface-2: rgba(255,255,255,.95); --line: rgba(90,20,60,.14); --field: rgba(255,255,255,.85);
+  --accent: #D6336C; --accent2: #7C4DFF; --on-accent: #FFFFFF;
+  --blob1: #FF8FB8; --blob2: #B79CFF; --blob3: #FFC2A1; --blob-op: .55;
+  --ok: #0F7A4C; --ok-bg: rgba(15,138,85,.13); --warn: #8F4F00; --warn-bg: rgba(200,120,0,.15); --bad: #BA1F2A; --bad-bg: rgba(200,40,50,.12);
+}
+:root {
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-inline: 16px;
+  padding-block: 22px 56px;
+  transition: background-color .6s, color .4s;
+  overflow-x: hidden;
+}
+h1, h2, h3, p, dl, dd { margin: 0; }
+h2 { font-family: var(--f-display); font-size: 1.1rem; font-weight: 600; text-wrap: balance; }
+.num { font-variant-numeric: tabular-nums; }
+.label { font-family: var(--f-mono); font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+
+/* drifting colour blobs behind everything */
+.bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.blob { position: absolute; width: 46vmax; height: 46vmax; border-radius: 50%; filter: blur(80px); opacity: var(--blob-op); transition: background-color 1s; }
+.blob.b1 { background: var(--blob1); top: -18vmax; left: -12vmax; animation: drift1 22s ease-in-out infinite alternate; }
+.blob.b2 { background: var(--blob2); top: 12vmax; right: -20vmax; animation: drift2 26s ease-in-out infinite alternate; }
+.blob.b3 { background: var(--blob3); bottom: -22vmax; left: 18vw; animation: drift3 30s ease-in-out infinite alternate; }
+@keyframes drift1 { to { transform: translate(18vmax, 12vmax) scale(1.15); } }
+@keyframes drift2 { to { transform: translate(-16vmax, 10vmax) scale(.9); } }
+@keyframes drift3 { to { transform: translate(-12vmax, -14vmax) scale(1.2); } }
+
+.app { position: relative; z-index: 1; max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; justify-content: space-between; animation: fadeUp .6s var(--ease) both; }
+.brand h1 {
+  font-family: var(--f-display); font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1;
+  background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.brand p { font-family: var(--f-mono); font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+.top-right { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.themes { display: flex; gap: 8px; padding: 5px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
+.swatch {
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer;
+  transition: transform .25s var(--ease), box-shadow .25s;
+}
+.swatch:hover { transform: scale(1.18); }
+.swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); transform: scale(1.05); }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 8px; padding: 5px 13px; border-radius: 999px;
+  font-family: var(--f-mono); font-size: 0.78rem; border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+  transition: background-color .4s, color .4s;
+}
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-bg); border-color: transparent; }
+.pill.warn { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
+.pill.bad { color: var(--bad); background: var(--bad-bg); border-color: transparent; }
+.pill.ok::before { animation: ping 1.8s ease-out infinite; }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 currentColor; } 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+/* tabs with a sliding underline */
+.tabs { position: relative; display: flex; gap: 4px; border-bottom: 1px solid var(--line); animation: fadeUp .6s .08s var(--ease) both; }
+.tab {
+  font: inherit; font-weight: 500; color: var(--muted); background: none; border: 0;
+  padding: 10px 16px; cursor: pointer; min-height: 44px; transition: color .25s;
+}
+.tab[aria-selected="true"], .tab:hover { color: var(--ink); }
+.tab-ind { position: absolute; left: 0; bottom: -1px; height: 3px; width: 0; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: transform .45s var(--ease), width .45s var(--ease); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* panels and glass cards */
+.panel { display: flex; flex-direction: column; gap: 22px; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; min-width: 0;
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  transition: background-color .5s, border-color .5s, transform .35s var(--ease);
+}
+.card > h2 { margin-bottom: 14px; }
+.panel:not([hidden]) > .card, .panel:not([hidden]) > .stats, .panel:not([hidden]) > .grid2 { animation: fadeUp .65s var(--ease) both; }
+.panel > :nth-child(2) { animation-delay: .06s !important; }
+.panel > :nth-child(3) { animation-delay: .12s !important; }
+.panel > :nth-child(4) { animation-delay: .18s !important; }
+.panel > :nth-child(5) { animation-delay: .24s !important; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.banner { padding: 11px 16px; border-radius: 12px; background: var(--warn-bg); color: var(--warn); font-size: 0.9rem; }
+.banner.bad { background: var(--bad-bg); color: var(--bad); }
+
+/* wait board with ring gauge */
+.board { --lvl: var(--accent); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px 48px; align-items: center; }
+.board[data-level="ok"] { --lvl: var(--ok); }
+.board[data-level="warn"] { --lvl: var(--warn); }
+.board[data-level="bad"] { --lvl: var(--bad); }
+.gauge { position: relative; width: min(260px, 100%); aspect-ratio: 1; margin-inline: auto; }
+.gauge svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.gauge .track { fill: none; stroke: var(--line); stroke-width: 14; }
+.gauge .fg {
+  fill: none; stroke: url(#ringGrad); stroke-width: 14; stroke-linecap: round;
+  stroke-dasharray: 653.45; stroke-dashoffset: 653.45;
+  transition: stroke-dashoffset 1.3s var(--ease);
+  filter: drop-shadow(0 0 9px var(--lvl));
+}
+.gauge .s1 { stop-color: var(--lvl); transition: stop-color .8s; }
+.gauge .s2 { stop-color: var(--accent2); }
+.gauge-in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.wait { font-family: var(--f-display); font-weight: 800; font-size: clamp(3.4rem, 12vw, 5rem); line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.wait-unit { font-family: var(--f-mono); font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-top: 4px; min-height: 1.2em; }
+.board-main .sub { font-family: var(--f-display); font-size: 1.35rem; font-weight: 600; line-height: 1.3; margin: 12px 0 4px; text-wrap: balance; }
+.rows { display: flex; flex-direction: column; margin-top: 16px; }
+.rows > div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.rows > div:last-child { border-bottom: 0; }
+.rows dt { color: var(--muted); }
+.rows dd { font-family: var(--f-mono); font-size: 0.92rem; text-align: right; }
+
+/* token ticket */
+.ticket { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px 28px; align-items: center; transition: box-shadow .5s; }
+.ticket.next { animation: glow 1.8s ease-in-out infinite; border-color: var(--accent); }
+@keyframes glow { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 34px 2px var(--accent); } }
+.token-id { font-family: var(--f-mono); font-size: 2.5rem; font-weight: 500; letter-spacing: 0.03em; padding-right: 28px; border-right: 2px dashed var(--line); }
+.ticket-info { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+.ticket-info div { min-width: 110px; }
+.ticket-info dd { font-family: var(--f-display); font-size: 1.55rem; font-weight: 700; }
+.ticket-wide { grid-column: 1 / -1; }
+.progress { height: 8px; border-radius: 8px; background: var(--line); overflow: hidden; }
+.progress span { display: block; height: 100%; width: 0; border-radius: 8px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 1s var(--ease); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* buttons */
+.btn {
+  font: inherit; font-weight: 500; min-height: 42px; padding: 8px 18px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+  transition: transform .2s var(--ease), box-shadow .3s, border-color .2s, filter .2s;
+}
+.btn:hover { border-color: var(--muted); transform: translateY(-1px); }
+.btn:active { transform: translateY(1px) scale(.98); }
+.btn.primary {
+  position: relative; overflow: hidden; font-weight: 600; border-color: transparent; color: var(--on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+}
+.btn.primary:hover { box-shadow: 0 8px 24px -6px var(--accent); }
+.btn.primary::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.4), transparent); transform: skewX(-18deg);
+}
+.btn.primary:hover::after { animation: shine .9s var(--ease); }
+@keyframes shine { to { left: 130%; } }
+.btn.small { min-height: 36px; padding: 4px 14px; font-size: 0.9rem; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* chart */
+#chart { display: block; width: 100%; }
+#chart .grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 5; }
+#chart .tick { fill: var(--muted); font-family: var(--f-mono); font-size: 11px; }
+#chart .area { fill: url(#areaGrad); }
+#chart .line { fill: none; stroke: url(#lineGrad); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+#chart .dot { fill: var(--accent2); stroke: var(--bg); stroke-width: 2; }
+#chart .ping { fill: none; stroke: var(--accent2); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: radar 2s ease-out infinite; }
+#chart .empty { fill: var(--muted); font-family: var(--f-body); font-size: 13px; }
+#chart.anim .line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.4s var(--ease) .15s forwards; }
+#chart.anim .area { animation: fadeIn 1.2s .5s both; }
+#chart.anim .dot { animation: pop .5s 1.3s var(--ease) both; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes radar { from { transform: scale(.6); opacity: .9; } to { transform: scale(2.6); opacity: 0; } }
+#chart .dot { transform-box: fill-box; transform-origin: center; }
+
+/* staff */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.stat {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; min-width: 0;
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); transition: transform .3s var(--ease), border-color .3s;
+}
+.stat:hover { transform: translateY(-3px); border-color: var(--accent); }
+.stat .v { font-family: var(--f-display); font-size: 2rem; font-weight: 700; line-height: 1.15; margin-top: 4px; }
+.stat .v small { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
+.form { display: flex; flex-direction: column; gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field .row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.field .row span:last-child { font-family: var(--f-mono); font-size: 0.9rem; }
+.field label { font-weight: 500; }
+input[type="range"] { width: 100%; accent-color: var(--accent); margin: 4px 0; }
+input[type="text"], input[type="url"] {
+  font: inherit; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--field); color: var(--ink); min-height: 42px; width: 100%; transition: border-color .2s, box-shadow .2s;
+}
+input[type="text"]:focus, input[type="url"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper output { font-family: var(--f-mono); min-width: 2ch; text-align: center; font-size: 1.15rem; }
+.feed { font-family: var(--f-mono); font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px; overflow-x: auto; }
+.feed div { white-space: nowrap; }
+pre.spec { margin: 12px 0 0; padding: 14px; border-radius: 12px; background: var(--field); border: 1px solid var(--line); font-family: var(--f-mono); font-size: 0.78rem; overflow-x: auto; }
+code { font-family: var(--f-mono); font-size: 0.85em; }
+hr.sep { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
+
+@media (max-width: 720px) {
+  .board, .grid2 { grid-template-columns: minmax(0, 1fr); }
+  .token-id { border-right: 0; padding-right: 0; border-bottom: 2px dashed var(--line); padding-bottom: 12px; }
+  .ticket { grid-template-columns: minmax(0, 1fr); }
+  .card { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Smart Queue Tracker</h1>
+      <p id="brandSub">Main canteen</p>
+    </div>
+    <div class="top-right">
+      <div class="themes" id="themes" role="radiogroup" aria-label="Colour scheme"></div>
+      <span id="sensorPill" class="pill" role="status">No sensor connected</span>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" id="tab-visitor" aria-selected="true" aria-controls="panel-visitor">Visitor view</button>
+    <button class="tab" role="tab" id="tab-staff" aria-selected="false" aria-controls="panel-staff">Staff view</button>
+    <span class="tab-ind" id="tabInd" aria-hidden="true"></span>
+  </div>
+
+  <!-- VISITOR VIEW -->
+  <main class="panel" id="panel-visitor" role="tabpanel" aria-labelledby="tab-visitor">
+    <p id="banner" class="banner" hidden></p>
+
+    <section class="card board" id="board" data-level="" aria-label="Current wait">
+      <div class="gauge">
+        <svg viewBox="0 0 240 240" aria-hidden="true">
+          <defs>
+            <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop class="s1" offset="0"/><stop class="s2" offset="1"/></linearGradient>
+          </defs>
+          <circle class="track" cx="120" cy="120" r="104"/>
+          <circle class="fg" id="ringFg" cx="120" cy="120" r="104" transform="rotate(-90 120 120)"/>
+        </svg>
+        <div class="gauge-in">
+          <p class="wait" id="waitNum">&ndash;</p>
+          <p class="wait-unit" id="waitUnit"></p>
+        </div>
+      </div>
+      <div class="board-main">
+        <p class="label">Estimated wait</p>
+        <p class="sub" id="waitSub">Waiting for the sensor to report.</p>
+        <p class="muted small" id="waitBasis"></p>
+        <div style="margin-top: 14px;"><span id="levelPill" class="pill">No data</span></div>
+        <dl class="rows">
+          <div><dt>People in queue</dt><dd id="rowCount" class="num">&ndash;</dd></div>
+          <div><dt>You would be served</dt><dd id="rowServed" class="num">&ndash;</dd></div>
+          <div><dt>Last sensor update</dt><dd id="rowUpdated" class="num">&ndash;</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Your token">
+      <div id="tokenEmpty">
+        <h2>Track your own place</h2>
+        <p class="muted" style="margin: 6px 0 14px;">Take a token and the estimate for you updates as people in front of you leave.</p>
+        <button class="btn primary" id="takeToken" type="button" disabled>Take a token</button>
+        <p class="muted small" id="tokenHint" style="margin-top: 8px;">Available once the sensor reports a count.</p>
+      </div>
+      <div id="tokenCard" class="ticket" hidden>
+        <div>
+          <p class="label">Your token</p>
+          <p class="token-id" id="tokenId">A-001</p>
+        </div>
+        <dl class="ticket-info">
+          <div><dt class="label">People ahead</dt><dd id="tokenAhead" class="num">0</dd></div>
+          <div><dt class="label">Your wait</dt><dd id="tokenWait" class="num">0 min</dd></div>
+          <div><dt class="label">Expected around</dt><dd id="tokenAt" class="num">&ndash;</dd></div>
+        </dl>
+        <div class="progress ticket-wide" role="progressbar" aria-label="Progress through the queue" aria-valuemin="0" aria-valuemax="100" id="tokenProg"><span id="tokenBar"></span></div>
+        <p class="ticket-wide muted" id="tokenMsg"></p>
+        <div class="actions ticket-wide"><button class="btn small" id="leaveToken" type="button">Leave the queue</button></div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Queue over time">
+      <h2>People in queue, last 15 minutes</h2>
+      <div id="chartWrap"><svg id="chart" role="img" aria-label="Line chart of people in the queue over the last 15 minutes"></svg></div>
+    </section>
+  </main>
+
+  <!-- STAFF VIEW -->
+  <section class="panel" id="panel-staff" role="tabpanel" aria-labelledby="tab-staff" hidden>
+    <div class="stats">
+      <div class="stat"><p class="label">In queue</p><p class="v num" id="stCount">&ndash;</p></div>
+      <div class="stat"><p class="label">Entered</p><p class="v num" id="stIn">0</p><p class="muted small">since this page opened</p></div>
+      <div class="stat"><p class="label">Left</p><p class="v num" id="stOut">0</p><p class="muted small">since this page opened</p></div>
+      <div class="stat"><p class="label">Time per person</p><p class="v num" id="stGap">&ndash;</p><p class="muted small" id="stGapNote"></p></div>
+      <div class="stat"><p class="label">Throughput</p><p class="v num" id="stRate">&ndash;</p><p class="muted small">needs a minute of data</p></div>
+    </div>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Queue settings</h2>
+        <div class="form">
+          <div class="field">
+            <label for="qname">Queue name</label>
+            <input type="text" id="qname" value="Main canteen" maxlength="40" autocomplete="off">
+          </div>
+          <div class="field">
+            <div class="row"><span>Counters open</span></div>
+            <div class="stepper">
+              <button class="btn small" id="cMinus" type="button" aria-label="Open one fewer counter">&minus;</button>
+              <output id="cVal" for="cMinus cPlus">1</output>
+              <button class="btn small" id="cPlus" type="button" aria-label="Open one more counter">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <div class="row"><label for="baseline">Starting time per person</label><span id="baselineVal">60 s</span></div>
+            <input type="range" id="baseline" min="20" max="180" step="5" value="60">
+            <p class="muted small">Used until three people have left the queue. After that the estimate uses the average of the last ten.</p>
+          </div>
+          <div><button class="btn small" id="clearBtn" type="button">Clear history and counts</button></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Sensor connection</h2>
+        <div class="form">
+          <div class="field">
+            <p class="label">Arduino over USB</p>
+            <p class="muted small">Plug the Arduino in, close the Arduino Serial Monitor, then click Connect and pick its port. Works in Chrome and Edge.</p>
+            <div class="actions" style="margin-top: 6px;">
+              <button class="btn primary" id="serialConnect" type="button">Connect Arduino</button>
+              <button class="btn" id="serialDisconnect" type="button" hidden>Disconnect</button>
+            </div>
+            <p class="small" id="serialStatus" role="status">Not connected.</p>
+          </div>
+          <hr class="sep">
+          <div class="field">
+            <p class="label">Or a Wi-Fi board (ESP32)</p>
+            <label for="apiUrl">Sensor data URL</label>
+            <input type="url" id="apiUrl" placeholder="http://192.168.1.50:3000/api/queues/canteen-1" autocomplete="off" spellcheck="false">
+            <p class="muted small">The app asks this address for the latest count every few seconds. Leave it empty until your hardware is ready.</p>
+          </div>
+          <div class="actions">
+            <button class="btn primary" id="saveUrl" type="button">Save and connect</button>
+          </div>
+          <p class="small" id="connStatus">Not connected.</p>
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Latest sensor data</h2>
+      <div class="feed" id="feed"><div class="muted">Nothing received yet.</div></div>
+      <p class="label" style="margin-top: 18px;">Expected response from the sensor URL</p>
+      <pre class="spec">{
+  "count": 7,                          // people in the queue right now (required)
+  "updatedAt": "2026-10-10T16:02:14Z", // when the sensor last reported (optional)
+  "entered": 120,                      // running total through the entry sensor (optional)
+  "exited": 113                        // running total through the exit sensor (optional)
+}</pre>
+      <p class="muted small" style="margin-top: 8px;">Sending <code>exited</code> lets the app measure how fast the queue moves. Without it the estimate uses the starting time per person.</p>
+    </section>
+  </section>
+</div>
+
+<script>
+/*
+  SMART QUEUE TRACKER
+
+  Connecting hardware, three options:
+  0) Arduino over USB: Staff view > Connect Arduino. The sketch prints "enter" / "exit" lines.
+  1) Pull: type your server's URL into Staff view > Sensor connection. The app fetches it every few
+     seconds and expects the JSON shown on that screen. The server must allow cross-origin requests
+     (header Access-Control-Allow-Origin: *) when this page is opened from a file or another address.
+  2) Push: call window.queueTracker.applyReading({ count: 7, exited: 113 }) or
+     window.queueTracker.ingest({ event: 'enter' | 'exit' | 'sync', count: 7 }) from your own code
+     (a WebSocket, MQTT over WebSocket, Firebase listener, ...).
+*/
+(function () {
+  'use strict';
+
+  var CONFIG = {
+    apiUrl: '',        // default sensor URL, can also be set in Staff view
+    pollMs: 3000,      // how often to ask the sensor URL
+    staleAfterSec: 20, // show "sensor offline" if no reading for this long
+    ringMaxSec: 1800   // the ring is full at this wait (30 minutes)
+  };
+
+  /* ---------- estimate logic ---------- */
+  var MAX_GAPS = 10, MIN_GAPS = 3;
+  function mean(a) { var s = 0; for (var i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
+  function serviceGap(gaps, baseline, counters) {
+    if (gaps.length >= MIN_GAPS) return mean(gaps.slice(-MAX_GAPS));
+    return baseline / Math.max(1, counters);
+  }
+  function estimateWait(ahead, gaps, baseline, counters) { return ahead * serviceGap(gaps, baseline, counters); }
+  function waitLevel(sec) { return sec < 300 ? 'ok' : (sec < 900 ? 'warn' : 'bad'); }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function fmtWait(sec) {
+    if (sec < 1) return { num: '0', unit: 'min', text: 'now' };
+    if (sec < 45) return { num: '<1', unit: 'min', text: 'under 1 min' };
+    var m = Math.round(sec / 60);
+    if (m < 60) return { num: String(m), unit: 'min', text: m + ' min' };
+    var h = Math.floor(m / 60), mm = m % 60;
+    return { num: h + ':' + pad(mm), unit: 'hours', text: h + ' h ' + mm + ' min' };
+  }
+  function fmtGap(sec) {
+    sec = Math.round(sec);
+    if (sec < 60) return sec + ' s';
+    return Math.floor(sec / 60) + ' min ' + pad(sec % 60) + ' s';
+  }
+  /* ---------- end estimate logic ---------- */
+
+  function $(id) { return document.getElementById(id); }
+  function setText(el, v) { if (el.textContent !== v) el.textContent = v; }
+  function now() { return Date.now() / 1000; }
+  function clock(sec, withSec) {
+    var o = { hour: 'numeric', minute: '2-digit' };
+    if (withSec) o.second = '2-digit';
+    return new Date(sec * 1000).toLocaleTimeString([], o);
+  }
+  var reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // Whole numbers count up or down smoothly. Anything else is set directly.
+  function setNum(el, val) {
+    val = String(val);
+    if (el._to === val) return;
+    if (el._raf) { cancelAnimationFrame(el._raf); el._raf = null; }
+    var from = parseInt(el.textContent, 10);
+    var isInt = /^\d+$/.test(val);
+    el._to = val;
+    if (!isInt || isNaN(from) || reduceMotion || from === +val) { el.textContent = val; return; }
+    var to = +val, t0 = performance.now(), dur = 700;
+    (function step(t) {
+      var k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = String(Math.round(from + (to - from) * e));
+      if (k < 1) el._raf = requestAnimationFrame(step); else el._raf = null;
+    })(t0);
+  }
+
+  /* ---------- colour schemes ---------- */
+  var THEMES = [
+    { id: 'aurora',  name: 'Aurora',  c: ['#7C8CFF', '#22D3EE'] },
+    { id: 'sunset',  name: 'Sunset',  c: ['#FF8A5C', '#FF4D8D'] },
+    { id: 'forest',  name: 'Forest',  c: ['#34D399', '#A3E635'] },
+    { id: 'ocean',   name: 'Ocean',   c: ['#1D63E8', '#0A8FB0'] },
+    { id: 'blossom', name: 'Blossom', c: ['#D6336C', '#7C4DFF'] }
+  ];
+  function applyTheme(id, store) {
+    document.documentElement.setAttribute('data-theme', id);
+    var btns = $('themes').children;
+    for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-checked', btns[i].dataset.id === id ? 'true' : 'false');
+    if (store) { try { localStorage.setItem('smartQueueTracker.theme', id); } catch (e) {} }
+    chartDirty = true;
+  }
+  THEMES.forEach(function (t) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'swatch'; b.setAttribute('role', 'radio'); b.dataset.id = t.id;
+    b.setAttribute('aria-label', t.name + ' colour scheme'); b.title = t.name;
+    b.style.background = 'linear-gradient(135deg,' + t.c[0] + ',' + t.c[1] + ')';
+    b.addEventListener('click', function () { applyTheme(t.id, true); });
+    $('themes').appendChild(b);
+  });
+
+  /* ---------- saved settings (this browser only) ---------- */
+  var KEY = 'smartQueueTracker.v1';
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { saved = {}; }
+  function persist() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        queueName: S.queueName, counters: S.counters, baseline: S.baseline,
+        apiUrl: CONFIG.apiUrl, nextToken: S.nextToken, myToken: S.myToken
+      }));
+    } catch (e) {}
+  }
+  if (typeof saved.apiUrl === 'string') CONFIG.apiUrl = saved.apiUrl;
+
+  /* ---------- state: only ever holds what the sensor reported ---------- */
+  var S = {
+    queueName: typeof saved.queueName === 'string' ? saved.queueName : 'Main canteen',
+    counters: saved.counters >= 1 && saved.counters <= 4 ? saved.counters : 1,
+    baseline: saved.baseline >= 20 && saved.baseline <= 180 ? saved.baseline : 60,
+    nextToken: saved.nextToken > 0 ? saved.nextToken : 1,
+    myToken: saved.myToken && typeof saved.myToken.id === 'string' ? saved.myToken : null,
+    count: null,            // null until the first reading arrives
+    lastBeat: null,         // time of the sensor's last reading
+    lastReadingTs: null,
+    openedAt: now(),
+    entered: 0, exited: 0, lastEntered: null, lastExited: null,
+    exitGaps: [], exitTimes: [], lastExitT: null,
+    history: [], feed: [], connError: null,
+    serialOn: false, serialMsg: ''
+  };
+  var chartDirty = true, chartAnim = true, feedDirty = true;
+
+  /* ---------- reading in sensor data ---------- */
+  function logFeed(data) {
+    S.feed.unshift({ at: clock(now(), true), data: data });
+    if (S.feed.length > 8) S.feed.pop();
+    feedDirty = true;
+  }
+  function sample() {
+    if (S.count === null) return;
+    S.history.push({ t: now(), c: S.count });
+    var cutoff = now() - 1200;
+    while (S.history.length > 1 && S.history[0].t < cutoff) S.history.shift();
+    chartDirty = true;
+  }
+  function recordExit(t) {
+    S.exitTimes.push(t);
+    S.exitTimes = S.exitTimes.filter(function (x) { return x > now() - 600; });
+    if (S.lastExitT !== null) {
+      var g = t - S.lastExitT;
+      if (g > 0 && g < 600) { S.exitGaps.push(g); if (S.exitGaps.length > 30) S.exitGaps.shift(); }
+    }
+    S.lastExitT = S.count > 0 ? t : null;
+  }
+  function capToken() {
+    if (S.myToken && S.count !== null) S.myToken.ahead = Math.min(S.myToken.ahead, S.count);
+  }
+
+  // Event style: one message per person passing a sensor.
+  function ingest(msg) {
+    if (!msg || !msg.event) return;
+    var t = now();
+    if (S.count === null) S.count = 0;
+    if (msg.event === 'enter') {
+      S.count++; S.entered++;
+    } else if (msg.event === 'exit') {
+      if (S.count > 0) {
+        S.count--; S.exited++;
+        recordExit(t);
+        if (S.myToken && S.myToken.ahead > 0) S.myToken.ahead--;
+      }
+    } else if (msg.event === 'sync' && typeof msg.count === 'number' && msg.count >= 0) {
+      S.count = Math.round(msg.count); S.lastExitT = null;
+    }
+    capToken();
+    S.lastBeat = t; S.connError = null;
+    logFeed(msg); sample(); persist(); render();
+  }
+
+  // Snapshot style: the latest totals, as returned by the sensor URL.
+  function applyReading(r) {
+    if (!r || typeof r.count !== 'number' || r.count < 0) return;
+    var t = now();
+    var ts = r.updatedAt ? Date.parse(r.updatedAt) / 1000 : t;
+    if (isNaN(ts)) ts = t;
+    ts = Math.min(ts, t);
+    var prev = S.lastReadingTs === null ? ts : S.lastReadingTs;
+    S.count = Math.round(r.count);
+    if (typeof r.exited === 'number') {
+      if (S.lastExited !== null && r.exited > S.lastExited) {
+        var k = r.exited - S.lastExited;
+        S.exited += k;
+        for (var i = 1; i <= k; i++) recordExit(prev + (ts - prev) * i / k);
+        if (S.myToken) S.myToken.ahead = Math.max(0, S.myToken.ahead - k);
+      }
+      S.lastExited = r.exited;
+    }
+    if (typeof r.entered === 'number') {
+      if (S.lastEntered !== null && r.entered > S.lastEntered) S.entered += r.entered - S.lastEntered;
+      S.lastEntered = r.entered;
+    }
+    capToken();
+    S.lastBeat = ts; S.lastReadingTs = ts; S.connError = null;
+    logFeed(r); sample(); persist(); render();
+  }
+
+  /* ---------- polling the sensor URL ---------- */
+  var pollTimer = null;
+  function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+  function startPolling() {
+    stopPolling();
+    S.connError = null;
+    if (!CONFIG.apiUrl) { render(); return; }
+    function tick() {
+      fetch(CONFIG.apiUrl, { cache: 'no-store' })
+        .then(function (res) { if (!res.ok) throw new Error('The sensor URL answered with ' + res.status + '.'); return res.json(); })
+        .then(function (data) { applyReading(data); })
+        .catch(function (err) {
+          S.connError = err && err.message && err.message.indexOf('answered') === 0 ? err.message :
+            'Could not reach the sensor URL. Check the address, that the server is running, and that it allows cross-origin requests.';
+          render();
+        });
+    }
+    tick();
+    pollTimer = setInterval(tick, CONFIG.pollMs);
+  }
+
+  /* ---------- Arduino over USB (Web Serial, Chrome and Edge) ----------
+     The Arduino prints one line per event: "enter", "exit", "reset", plus "ok" every few seconds.
+     This page reads those lines and feeds them into ingest(). */
+  var serial = { port: null, reader: null };
+  function heartbeat() {
+    var first = S.count === null;
+    if (first) S.count = 0;
+    S.lastBeat = now(); S.connError = null;
+    if (first) sample();
+    render();
+  }
+  function handleLine(line) {
+    line = String(line).trim().toLowerCase();
+    if (!line) return;
+    var m;
+    if (line === 'enter' || line === 'exit') ingest({ event: line });
+    else if (line === 'reset') ingest({ event: 'sync', count: 0 });
+    else if ((m = /^sync\s+(\d+)$/.exec(line))) ingest({ event: 'sync', count: +m[1] });
+    else if (line === 'ok' || line === 'ready') heartbeat();
+  }
+  function serialSupported() { return 'serial' in navigator; }
+  async function openPort(port) {
+    await port.open({ baudRate: 9600 });
+    serial.port = port; S.serialOn = true; S.serialMsg = '';
+    readLoop(port);
+  }
+  async function connectSerial() {
+    if (!serialSupported()) { S.serialMsg = 'USB needs Chrome or Edge on a laptop.'; render(); return; }
+    try {
+      var port = await navigator.serial.requestPort();
+      await openPort(port);
+    } catch (e) {
+      S.serialMsg = e && e.name === 'NotFoundError' ? 'No port was chosen.' :
+        'Could not open the port. Close the Arduino Serial Monitor and any other program using it, then try again.';
+    }
+    render();
+  }
+  async function readLoop(port) {
+    var decoder = new TextDecoderStream();
+    var closed = port.readable.pipeTo(decoder.writable).catch(function () {});
+    var reader = decoder.readable.getReader();
+    serial.reader = reader;
+    var buf = '';
+    try {
+      while (true) {
+        var r = await reader.read();
+        if (r.done) break;
+        buf += r.value;
+        var lines = buf.split(/\r?\n/);
+        buf = lines.pop();
+        if (buf.length > 200) buf = '';
+        lines.forEach(handleLine);
+      }
+    } catch (e) {}
+    try { reader.releaseLock(); } catch (e) {}
+    await closed;
+    try { await port.close(); } catch (e) {}
+    serial.port = null; serial.reader = null;
+    S.serialOn = false;
+    if (!S.serialMsg) S.serialMsg = 'The Arduino was disconnected.';
+    render();
+  }
+  async function disconnectSerial() {
+    S.serialMsg = 'Disconnected.';
+    try { if (serial.reader) await serial.reader.cancel(); } catch (e) {}
+  }
+  function tryAutoConnect() {
+    if (!serialSupported() || !navigator.serial.getPorts) return;
+    navigator.serial.getPorts().then(function (ports) {
+      if (ports.length) return openPort(ports[0]);
+    }).catch(function () {}).then(function () { render(); });
+  }
+
+  /* ---------- rendering ---------- */
+  var tabNow = 'visitor';
+  var RING_C = 653.45;
+  function setRing(frac) { $('ringFg').style.strokeDashoffset = String(RING_C * (1 - Math.max(0, Math.min(1, frac)))); }
+
+  function render() {
+    var hasData = S.count !== null;
+    var stale = hasData && (now() - S.lastBeat) > CONFIG.staleAfterSec;
+    var gap = serviceGap(S.exitGaps, S.baseline, S.counters);
+    var measured = S.exitGaps.length >= MIN_GAPS;
+
+    setText($('brandSub'), S.queueName || 'Queue');
+
+    // connection pill and banner
+    var pill = $('sensorPill'), pt, pc = 'pill';
+    if (S.connError) { pt = 'Cannot reach sensor'; pc += ' bad'; }
+    else if (stale) { pt = 'Sensor offline'; pc += ' bad'; }
+    else if (hasData) { pt = 'Sensor live'; pc += ' ok'; }
+    else if (CONFIG.apiUrl) { pt = 'Connecting'; }
+    else { pt = 'No sensor connected'; }
+    setText(pill, pt); if (pill.className !== pc) pill.className = pc;
+
+    var banner = $('banner');
+    if (S.connError) {
+      banner.hidden = false; banner.className = 'banner bad';
+      setText(banner, S.connError + (hasData ? ' Showing the last count from ' + clock(S.lastBeat) + '.' : ''));
+    } else if (stale) {
+      banner.hidden = false; banner.className = 'banner';
+      setText(banner, 'The sensor has not reported since ' + clock(S.lastBeat) + '. Showing the last known count.');
+    } else { banner.hidden = true; }
+
+    // board and ring
+    var board = $('board');
+    if (!hasData) {
+      setNum($('waitNum'), '–'); setText($('waitUnit'), '');
+      setText($('waitSub'), (CONFIG.apiUrl || S.serialOn) ? 'Waiting for the first reading from the sensor.' : 'Connect the sensor in Staff view to see live wait times.');
+      setText($('waitBasis'), '');
+      var lp0 = $('levelPill'); setText(lp0, 'No data'); if (lp0.className !== 'pill') lp0.className = 'pill';
+      setNum($('rowCount'), '–'); setText($('rowServed'), '–'); setText($('rowUpdated'), '–');
+      if (board.getAttribute('data-level') !== '') board.setAttribute('data-level', '');
+      setRing(0);
+    } else {
+      var ahead = S.count;
+      var wait = estimateWait(ahead, S.exitGaps, S.baseline, S.counters);
+      var w = fmtWait(wait), lvl = waitLevel(wait);
+      setNum($('waitNum'), ahead === 0 ? '0' : w.num);
+      setText($('waitUnit'), w.unit);
+      setText($('waitSub'), ahead === 0 ? 'No one is in the queue. You can walk straight up.' :
+        ahead + (ahead === 1 ? ' person' : ' people') + ' ahead, about ' + fmtGap(gap) + ' each');
+      setText($('waitBasis'), measured ? 'Based on the last ' + Math.min(MAX_GAPS, S.exitGaps.length) + ' people to leave.' :
+        'Using the starting estimate until three people have left.');
+      var lp = $('levelPill');
+      setText(lp, lvl === 'ok' ? 'Short wait' : (lvl === 'warn' ? 'Moderate wait' : 'Long wait'));
+      var lc = 'pill ' + lvl; if (lp.className !== lc) lp.className = lc;
+      setNum($('rowCount'), String(S.count));
+      setText($('rowServed'), clock(now() + wait));
+      setText($('rowUpdated'), clock(S.lastBeat, true));
+      if (board.getAttribute('data-level') !== lvl) board.setAttribute('data-level', lvl);
+      setRing(Math.max(wait / CONFIG.ringMaxSec, ahead > 0 ? 0.03 : 0));
+    }
+
+    renderToken(hasData);
+    if (tabNow === 'staff') renderStaff(gap, measured, hasData);
+    if (chartDirty && tabNow === 'visitor') { drawChart(); chartDirty = false; }
+  }
+
+  function renderToken(hasData) {
+    var tk = S.myToken;
+    $('tokenEmpty').hidden = !!tk;
+    $('tokenCard').hidden = !tk;
+    $('takeToken').disabled = !hasData;
+    $('tokenHint').hidden = hasData;
+    if (!tk) return;
+    var ahead = hasData ? Math.min(tk.ahead, S.count) : tk.ahead;
+    if (!(tk.start >= ahead)) tk.start = ahead;
+    var wait = estimateWait(ahead, S.exitGaps, S.baseline, S.counters);
+    var pct = tk.start > 0 ? Math.round((1 - ahead / tk.start) * 100) : 100;
+    setText($('tokenId'), tk.id);
+    setNum($('tokenAhead'), String(ahead));
+    setText($('tokenWait'), ahead === 0 ? 'Now' : fmtWait(wait).text);
+    setText($('tokenAt'), clock(now() + wait));
+    $('tokenBar').style.width = pct + '%';
+    $('tokenProg').setAttribute('aria-valuenow', String(pct));
+    setText($('tokenMsg'), ahead === 0 ? 'You are next. Please head to the counter.' :
+      'This updates each time someone in front of you leaves.');
+    $('tokenCard').classList.toggle('next', ahead === 0);
+  }
+
+  function renderStaff(gap, measured, hasData) {
+    setNum($('stCount'), hasData ? String(S.count) : '–');
+    setNum($('stIn'), String(S.entered));
+    setNum($('stOut'), String(S.exited));
+    setText($('stGap'), fmtGap(gap));
+    setText($('stGapNote'), measured ? 'measured from exits' : 'starting value');
+    var win = Math.min(600, now() - S.openedAt);
+    var rate = $('stRate');
+    if (hasData && win >= 60) { var h = Math.round(S.exitTimes.length * 3600 / win) + ' <small>per hour</small>'; if (rate.innerHTML !== h) rate.innerHTML = h; }
+    else setText(rate, '–');
+
+    setText($('serialStatus'), S.serialOn ?
+      'Connected over USB.' + (hasData ? ' Last signal at ' + clock(S.lastBeat, true) + '.' : ' Waiting for the first signal.') :
+      (S.serialMsg || 'Not connected.'));
+    $('serialConnect').hidden = S.serialOn;
+    $('serialDisconnect').hidden = !S.serialOn;
+
+    var cs = $('connStatus');
+    if (S.connError) setText(cs, S.connError);
+    else if (!CONFIG.apiUrl) setText(cs, 'No URL set.');
+    else if (!hasData) setText(cs, 'Connecting to ' + CONFIG.apiUrl + ' ...');
+    else setText(cs, 'Connected. Last reading at ' + clock(S.lastBeat, true) + '.');
+
+    if (feedDirty) {
+      var feed = $('feed');
+      feed.textContent = '';
+      if (!S.feed.length) {
+        var d0 = document.createElement('div'); d0.className = 'muted'; d0.textContent = 'Nothing received yet.'; feed.appendChild(d0);
+      }
+      S.feed.forEach(function (m) {
+        var d = document.createElement('div');
+        d.textContent = m.at + '  ' + JSON.stringify(m.data);
+        feed.appendChild(d);
+      });
+      feedDirty = false;
+    }
+  }
+
+  function drawChart() {
+    var svg = $('chart');
+    var W = Math.max(300, $('chartWrap').clientWidth || 600), H = 210;
+    var L = 30, R = 16, T = 14, B = 28, span = 900;
+    var t1 = now(), t0 = t1 - span;
+    var pts = S.history.filter(function (p) { return p.t >= t0 - 30; });
+    if (S.count !== null) pts = pts.concat([{ t: t1, c: S.count }]);
+    var peak = 8;
+    pts.forEach(function (p) { if (p.c > peak) peak = p.c; });
+    var yMax = Math.ceil(peak / 4) * 4;
+    function x(t) { return L + (Math.max(t, t0) - t0) / span * (W - L - R); }
+    function y(v) { return T + (1 - v / yMax) * (H - T - B); }
+    var defs = '<defs>' +
+      '<linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--accent2)"/></linearGradient>' +
+      '<linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent2);stop-opacity:.38"/><stop offset="1" style="stop-color:var(--accent2);stop-opacity:0"/></linearGradient>' +
+      '</defs>';
+    var g = '';
+    [0, yMax / 2, yMax].forEach(function (v) {
+      g += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>' +
+           '<text class="tick" x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v + '</text>';
+    });
+    [0, 300, 600, 900].forEach(function (s) {
+      var lab = s === 900 ? 'now' : '−' + ((900 - s) / 60) + ' min';
+      var anchor = s === 0 ? 'start' : (s === 900 ? 'end' : 'middle');
+      g += '<text class="tick" x="' + x(t0 + s) + '" y="' + (H - 8) + '" text-anchor="' + anchor + '">' + lab + '</text>';
+    });
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('height', H);
+    svg.classList.toggle('anim', chartAnim && !reduceMotion);
+    chartAnim = false;
+    if (!pts.length) {
+      svg.innerHTML = defs + g + '<text class="empty" x="' + (W / 2) + '" y="' + (H / 2 - 6) + '" text-anchor="middle">No readings yet. The chart fills in as the sensor reports.</text>';
+      return;
+    }
+    var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(p.t).toFixed(1) + ' ' + y(p.c).toFixed(1); }).join(' ');
+    var base = y(0).toFixed(1), last = pts[pts.length - 1];
+    var area = d + ' L' + x(last.t).toFixed(1) + ' ' + base + ' L' + x(pts[0].t).toFixed(1) + ' ' + base + ' Z';
+    var cx = x(last.t).toFixed(1), cy = y(last.c).toFixed(1);
+    svg.innerHTML = defs + g + '<path class="area" d="' + area + '"/><path class="line" pathLength="1" d="' + d + '"/>' +
+      '<circle class="ping" cx="' + cx + '" cy="' + cy + '" r="7"/><circle class="dot" cx="' + cx + '" cy="' + cy + '" r="5"/>';
+  }
+
+  /* ---------- controls ---------- */
+  function moveInd() {
+    var t = $('tab-' + tabNow), ind = $('tabInd');
+    ind.style.width = t.offsetWidth + 'px';
+    ind.style.transform = 'translateX(' + t.offsetLeft + 'px)';
+  }
+  function setTab(name) {
+    tabNow = name;
+    ['visitor', 'staff'].forEach(function (n) {
+      $('panel-' + n).hidden = n !== name;
+      $('tab-' + n).setAttribute('aria-selected', n === name ? 'true' : 'false');
+    });
+    chartDirty = true; chartAnim = true; feedDirty = true;
+    moveInd();
+    render();
+  }
+  $('tab-visitor').addEventListener('click', function () { setTab('visitor'); });
+  $('tab-staff').addEventListener('click', function () { setTab('staff'); });
+  window.addEventListener('resize', function () { chartDirty = true; moveInd(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveInd);
+
+  $('takeToken').addEventListener('click', function () {
+    if (S.count === null) return;
+    var n = S.nextToken++;
+    S.myToken = { id: 'A-' + (n < 10 ? '00' : (n < 100 ? '0' : '')) + n, ahead: S.count, start: S.count };
+    persist(); render();
+  });
+  $('leaveToken').addEventListener('click', function () { S.myToken = null; persist(); render(); });
+
+  function setCounters(n) { S.counters = Math.max(1, Math.min(4, n)); setText($('cVal'), String(S.counters)); persist(); render(); }
+  $('cMinus').addEventListener('click', function () { setCounters(S.counters - 1); });
+  $('cPlus').addEventListener('click', function () { setCounters(S.counters + 1); });
+  $('baseline').addEventListener('input', function (e) { S.baseline = +e.target.value; setText($('baselineVal'), S.baseline + ' s'); persist(); render(); });
+  $('qname').addEventListener('input', function (e) { S.queueName = e.target.value; persist(); render(); });
+  $('saveUrl').addEventListener('click', function () { CONFIG.apiUrl = $('apiUrl').value.trim(); persist(); startPolling(); render(); });
+  $('clearBtn').addEventListener('click', function () {
+    S.count = null; S.lastBeat = null; S.lastReadingTs = null; S.entered = 0; S.exited = 0;
+    S.lastEntered = null; S.lastExited = null; S.exitGaps = []; S.exitTimes = []; S.lastExitT = null;
+    S.history = []; S.feed = []; S.connError = null; S.openedAt = now();
+    chartDirty = true; feedDirty = true; render();
+    if (CONFIG.apiUrl) startPolling();
+  });
+
+  /* ---------- start ---------- */
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'aurora', false);
+  $('serialConnect').addEventListener('click', connectSerial);
+  $('serialDisconnect').addEventListener('click', disconnectSerial);
+  if (!serialSupported()) { $('serialConnect').disabled = true; S.serialMsg = 'USB needs Chrome or Edge on a laptop.'; }
+  $('qname').value = S.queueName;
+  $('apiUrl').value = CONFIG.apiUrl;
+  $('cVal').textContent = String(S.counters);
+  $('baseline').value = S.baseline;
+  $('baselineVal').textContent = S.baseline + ' s';
+  setInterval(function () { render(); }, 1000);
+  setInterval(sample, 10000);
+  setTab('visitor');
+  startPolling();
+  tryAutoConnect();
+
+  // For your own code (WebSocket, MQTT, Firebase) and for testing from the browser console.
+  window.queueTracker = { ingest: ingest, applyReading: applyReading, handleLine: handleLine, state: function () { return S; } };
+})();
+</script>
+</body>
+</html>
